@@ -189,7 +189,7 @@ def scenario(n, newcomers_per_season=300):
     p_two = float(n[n.two].returned.mean())
     keep = 0.62  # возврат гонщика, который уже пережил первый сезон
     rows = []
-    for name, share_two in (("как сейчас в Поволжье", 0.16), ("как в среднем по России", float(n.two.mean())), ("как в Петербурге", 0.355),
+    for name, share_two in (("редкий календарь", 0.15), ("как в среднем по выборке", float(n.two.mean())), ("плотный календарь", 0.35),
                             ("цель: каждый второй новичок со вторым стартом", 0.50)):
         ret = share_two * p_two + (1 - share_two) * p_one
         s1 = newcomers_per_season
