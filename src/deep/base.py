@@ -19,7 +19,7 @@ VOLGA = ["Самарская область", "Республика Татарс
 REGION_FIX = {"Ленинградская область": "Санкт-Петербург и Ленинградская область", "Московская область": "Москва и Московская область",
               "Москва": "Москва и Московская область", "Санкт-Петербург": "Санкт-Петербург и Ленинградская область"}
 NOT_RACES = r"uci-|aalborg|chempionat-evropy|chempionat-rossii|detsk|lyzheroller|spidskeyt|cyprus|kipr|world-championship|pervenstvo-rossii"
-SRC_PRIORITY = {"fatracing": 0, "results.zone": 1, "russiarunning": 2, "orgeo": 3}
+SRC_PRIORITY = {"fatracing": 0, "results.zone": 1, "myfinish": 2, "russiarunning": 3, "orgeo": 4, "sportident": 5}
 
 
 def series_id(slug: str) -> str:
@@ -31,6 +31,41 @@ def series_id(slug: str) -> str:
     s = re.sub(r"[-_]\d{1,3}$", "", s)
     s = re.sub(r"[-_]{2,}", "-", s).strip("-_ ")
     return s or slug
+
+
+SLUG_REGION = [(r"mvm|istrinsk|tomilinsk|yahromsk|rublevsk|stupinsk|krasnogorsk|gabovsk|romashkovsk|sportmaster-pro|moskovsk|moskva|himki|"
+                r"volokolamsk|dubna|ruza|serpuhov|noginsk|klenovo|krylatsk|dmitrov|zvenigorod|kolomna|podolsk|odintsov|mytisch|lyubertsy|"
+                r"balashiha|dedovsk|kuchino|saltykov|troitsk-msk|zelenograd|luzhniki|sadovoe", "Москва и Московская область"),
+               (r"ohta|sankt-peterburg|spb|toksov|lembolov|orehov|petyayarvi|tsvelodubov|michurinsk|kavgolov|igora|vyborg|gatchin|sosnovo",
+                "Санкт-Петербург и Ленинградская область"),
+               (r"tatarstan|almetyevsk|kazan|elabug|chelny|nizhnekamsk", "Республика Татарстан"), (r"zarinsk|barnaul|belokuriha|altay", "Алтайский край"),
+               (r"gelendzhik|3mountains|tri-gory|sochi|krasnaya-polyana|krasnodar|anapa|novorossiysk|sirius", "Краснодарский край"),
+               (r"samar|tolyatti|zhigul", "Самарская область"), (r"nizhniy-novgorod|nizhegorod", "Нижегородская область"),
+               (r"ekaterinburg|sverdlovsk|ural", "Свердловская область"), (r"chelyabinsk|miass|zlatoust", "Челябинская область"),
+               (r"tula|tulsk|polenovo|yasnaya", "Тульская область"), (r"kaluga|kaluzhsk|obninsk", "Калужская область"), (r"tver|zavidovo", "Тверская область"),
+               (r"yaroslavl|pereslavl|rybinsk|uglich", "Ярославская область"), (r"vladimir|suzdal", "Владимирская область"),
+               (r"voronezh", "Воронежская область"), (r"rostov", "Ростовская область"), (r"perm", "Пермский край"), (r"ufa|bashk", "Республика Башкортостан"),
+               (r"saratov", "Саратовская область"), (r"penza", "Пензенская область"), (r"izhevsk|udmurt", "Удмуртская Республика"),
+               (r"novosibirsk", "Новосибирская область"), (r"krasnoyarsk", "Красноярский край"), (r"vladivostok|primor", "Приморский край")]
+
+
+def region_from_slug(slug):
+    s = str(slug).lower()
+    for rx, reg in SLUG_REGION:
+        if re.search(rx, s):
+            return reg
+    return None
+
+
+def series_from_name(name) -> str:
+    """Серия из названия события (для источников без осмысленного адреса): убираем год, номер этапа, кавычки."""
+    t = re.sub(r"[\"«»“”'().,:!]", " ", str(name).lower().replace("ё", "е"))
+    t = re.sub(r"(19|20)\d\d", " ", t)
+    m = re.search(r"этап\w*\s+(?:кубка\s+)?(\S.{3,})$", t)
+    if m and not re.fullmatch(r"[\d\sivx-]+", m[1]):
+        t = m[1]
+    t = re.sub(r"\b(\d+(-?[йяе]|-?ой|-?ый)?|[ivx]{1,4}|этап\w*|открыт\w*|от|ucp)\b", " ", t)
+    return "-".join(t.split()[:4]) or str(name)
 
 
 def parse_date(d, year):
@@ -50,11 +85,32 @@ def parse_date(d, year):
 def build():
     a = pd.read_parquet(RVVR / "data/processed/all_starts.parquet")
     a["date"] = [parse_date(d, y) for d, y in zip(a.date, a.year)]
+    # место проведения гонок RussiaRunning берём из каталога событий: в исходной таблице оно не заполнено
+    rr = RVVR / "data/raw/russiarunning/events.jsonl"
+    if rr.exists():
+        import json
+        import sys
+        sys.path.insert(0, str(RVVR / "src"))
+        from rvvr.races import region_of
+        place = {}
+        for l in rr.open():
+            e = json.loads(l)
+            place[e["code"]] = region_of(e.get("place"), e.get("city"), e.get("title"))
+        m = (a.src == "russiarunning") & a.region_event.isna()
+        a.loc[m, "region_event"] = a.loc[m, "event"].str.split("|").str[0].map(place)
+    # новые источники (MyFinish, полный каталог results.zone, sportident) — собраны в этом проекте, см. sources/merge.py
+    extra = DATA / "extra_starts.parquet"
+    a["event_name"], a["organizer"] = None, None
+    if extra.exists():
+        x = pd.read_parquet(extra)
+        a = pd.concat([a, x[x.columns.intersection(a.columns)]], ignore_index=True)
     a = a.dropna(subset=["date", "key"])
     # не любительские велогонки России: зарубежные старты, детские лиги, лыжероллеры, чемпионаты сборных
     a = a[~a.event.str.contains(NOT_RACES, case=False, regex=True)]
     a["year"] = a.date.dt.year
     a["region"] = a.region_event.replace(REGION_FIX)
+    miss = a.region.isna()
+    a.loc[miss, "region"] = a.loc[miss, "event"].map(region_from_slug)
     # одно событие приходит из нескольких источников: оставляем один старт на человека в день
     a["prio"] = a.src.map(SRC_PRIORITY)
     a = a.sort_values("prio").drop_duplicates(["key", "date"]).drop(columns="prio")
@@ -65,8 +121,10 @@ def build():
     a["series"] = a.event.map(series_id)
 
     org = pd.read_parquet(RVVR / "data/processed/participations.parquet").drop_duplicates("slug").set_index("slug")
-    a["organizer"] = a.event.map(org.organizer)
-    a["event_name"] = a.event.map(org.event_name)
+    a["organizer"] = a.event.map(org.organizer).fillna(a.organizer)
+    a["event_name"] = a.event.map(org.event_name).fillna(a.event_name)
+    named = a.src.isin(["myfinish", "sportident"])
+    a.loc[named, "series"] = a.loc[named, "event_name"].map(series_from_name)
     titles = pd.read_parquet(RVVR / "data/processed/orgeo_events.parquet")
     titles["orgeo_id"] = titles.orgeo_id.astype(str)
     a.loc[a.src == "orgeo", "event_name"] = a.loc[a.src == "orgeo", "event"].map(titles.set_index("orgeo_id").title)

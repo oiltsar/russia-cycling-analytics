@@ -166,6 +166,18 @@ def regions(ev):
     run = pd.read_csv(RVVR / "outputs/region_summary.csv").rename(columns={"agg": "region"})[["region", "orgeo_running_reg_per_100k_year", "orgeo_reg_athletics"]]
     alias = {"Москва и МО": "Москва и Московская область", "СПб и ЛО": "Санкт-Петербург и Ленинградская область"}
     races["region_full"] = races.region.replace(alias)
+    # гонки из новых источников (MyFinish, results.zone, sportident), которых нет в каталоге rvvr: сверяем по региону и дате
+    cat = pd.read_parquet(RVVR / "data/processed/races_all.parquet")
+    cat = cat[cat.year.between(2023, 2025)]
+    cat["region_full"] = cat.region.replace({"Москва": alias["Москва и МО"], "Московская область": alias["Москва и МО"],
+                                             "Санкт-Петербург": alias["СПб и ЛО"], "Ленинградская область": alias["СПб и ЛО"]})
+    known = set(zip(cat.region_full, pd.to_datetime(cat.date).dt.date))
+    new = ev[ev.src.isin(["myfinish", "results.zone", "sportident"]) & ev.year.between(2023, 2025) & ev.region.notna()]
+    new = new[[(r, d.date()) not in known for r, d in zip(new.region, new.date)]].drop_duplicates(["region", "date"])
+    add = new.groupby("region").size()
+    races["races_catalog"] = races.races
+    races["races"] = races.races + races.region_full.map(add).fillna(0).astype(int)
+    races["races_per_mln_year"] = races.races / 3 / races.population * 1e6
     e25 = ev[ev.year.between(2023, 2025) & ev.region.notna() & ev.date.dt.month.between(4, 10)]
     gap = e25.groupby(["region", "year"]).date.apply(lambda d: d.drop_duplicates().sort_values().diff().dt.days.median()).groupby("region").median().rename("median_gap_days")
     d = races.merge(gap, left_on="region_full", right_index=True, how="left").merge(run, on="region", how="left")
@@ -189,7 +201,7 @@ def scenario(n, newcomers_per_season=300):
     p_two = float(n[n.two].returned.mean())
     keep = 0.62  # возврат гонщика, который уже пережил первый сезон
     rows = []
-    for name, share_two in (("редкий календарь", 0.15), ("как в среднем по выборке", float(n.two.mean())), ("плотный календарь", 0.35),
+    for name, share_two in (("редкий календарь", 0.10), ("как в среднем по выборке", float(n.two.mean())), ("плотный календарь", 0.30),
                             ("цель: каждый второй новичок со вторым стартом", 0.50)):
         ret = share_two * p_two + (1 - share_two) * p_one
         s1 = newcomers_per_season

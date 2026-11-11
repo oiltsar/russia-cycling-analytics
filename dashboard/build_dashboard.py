@@ -136,7 +136,7 @@ sections = [
     ("Дисциплины", "Между дисциплинами почти не переходят", "Куда гонщик уходит на следующий год, в процентах от строки. 2023–2025 годы.", fig_transitions()),
     ("Сеть гонок", "Гонки России — это острова", f"{res['network']['nodes']} серии 2025–2026 годов, связь — общие участники. Наведите на точку.", fig_network()),
 ]
-kpis = [(f"{b['starts'] // 1000} тыс.", "стартов, 2023–2026"), (f"{b['riders'] / 1000:.1f}".replace(".", ",") + " тыс.", "гонщиков"), (f"{b['events']:,}".replace(",", " "), "событий"),
+kpis = [(f"{b['starts'] // 1000} тыс.", "стартов, 2014–2026"), (f"{b['riders'] / 1000:.1f}".replace(".", ",") + " тыс.", "гонщиков"), (f"{b['events']:,}".replace(",", " "), "событий"),
         (f"{b['returned'] * 100:.0f}%", "новичков возвращаются на следующий год"), (f"+{ca['aipw']['ate'] * 100:.0f} п.п.", "к возврату даёт второй старт за 60 дней")]
 body = "".join(f'<section><div class="eyebrow">{e}</div><h2>{t}</h2><p class="sub">{s}</p>{html(f)}</section>' for e, t, s, f in sections)
 page = f"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -157,12 +157,12 @@ h1 span {{ color:var(--accent); }} h2 {{ font-family:"PT Sans Narrow","Arial Nar
 section {{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:22px 18px 10px; margin-top:22px; overflow:hidden; }}
 footer {{ margin-top:28px; font-size:13.5px; color:var(--ink2); line-height:1.5; }} a {{ color:var(--ink); }}
 </style></head><body><main>
-<div class="eyebrow">Исследование · открытые протоколы 2023–2026</div>
+<div class="eyebrow">Исследование · открытые протоколы 2014–2026</div>
 <h1>Велогонки России:<br><span>что удерживает гонщиков</span></h1>
 <p class="lead">Почему одни участники любительских велогонок возвращаются на следующий сезон, а другие нет. Проект в работе: здесь показана обобщённая часть результатов.</p>
 <div class="kpis">{"".join(f'<div class="kpi"><b>{v}</b><span>{l}</span></div>' for v, l in kpis)}</div>
 {body}
-<footer>Данные: открытые протоколы и календари гонок (fatracing.ru, results.zone, RussiaRunning, Orgeo). Учтены только гонки с открытыми списками участников, все числа — нижняя граница; 2026 год неполный. На странице только обезличенные агрегаты.
+<footer>Данные: открытые протоколы и календари гонок (fatracing.ru, Orgeo, MyFinish, RussiaRunning, results.zone, sportident.online). Учтены только гонки с открытыми списками участников, все числа — нижняя граница; 2026 год неполный. На странице только обезличенные агрегаты.
 Автор: Александр Царегородский · <a href="https://github.com/oiltsar/russia-cycling-analytics">код и методы на GitHub</a></footer>
 </main></body></html>"""
 (ROOT / "docs").mkdir(exist_ok=True)
